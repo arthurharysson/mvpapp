@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle Financeiro Automatizado - SPA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Application Structure Plan: 
+        A single-page application with a top navigation bar to switch between five main sections: 
+        1. Dashboard: Overview of current financial status, budget vs. actual, and recent transactions. Includes a bar chart for budget vs. actual.
+        2. Contas Planejadas: An interactive list of planned expenses, allowing users to add new ones (mocked).
+        3. Transações Bancárias: A list of imported bank transactions with status indicators and options to categorize or explain (mocked).
+        4. Análise de Gastos: A detailed table and a grouped bar chart comparing planned vs. actual spending by category.
+        5. Justificativa de Gastos: A form to explain unplanned expenses or budget deviations.
+        This structure directly maps to the screens defined in the source report, providing a clear and task-oriented user flow. Interactions are designed to mimic the described functionalities, enhancing user understanding of the application's capabilities.
+    -->
+    <!-- Visualization & Content Choices:
+        - Dashboard (Orçamento vs. Real): Bar chart (Chart.js) for clear comparison. Stat cards for key metrics.
+        - Dashboard (Últimas Transações): Styled list (HTML/Tailwind).
+        - Contas Planejadas (Lista): Interactive list with mocked status toggles (HTML/Tailwind/JS). Modal for adding new items.
+        - Transações Bancárias (Lista): Styled list with status indicators and mocked action buttons (HTML/Tailwind/JS).
+        - Análise de Gastos (Tabela e Gráfico): HTML table for detailed data. Grouped bar chart (Chart.js) for visual comparison by category.
+        - Justificativa de Gastos (Formulário): Simple HTML form.
+        All choices prioritize clarity, direct representation of the report's information, and adherence to no SVG/Mermaid constraints. Unicode characters are used for icons.
+    -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Additional style for better chart responsiveness and container sizing */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px; /* Max width for larger screens */
+            min-height: 300px; /* Minimum height for smaller charts */
+            height: 40vh; /* Responsive height based on viewport */
+            max-height: 400px; /* Max height to prevent excessive vertical space */
+            margin-left: auto;
+            margin-right: auto;
+            padding: 10px; /* Padding inside the container */
+            background-color: #ffffff;
+            border-radius: 0.5rem; /* Tailwind's rounded-lg */
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); /* Tailwind's shadow-md */
+        }
+        /* Custom scrollbar for a cleaner look */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1; /* neutral-400 */
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8; /* neutral-500 */
+        }
+        .modal {
+            display: none; /* Hidden by default */
+        }
+        .modal.active {
+            display: flex; /* Show when active */
+        }
+        .tab-button.active {
+            border-bottom-color: #0284c7; /* sky-600 */
+            color: #0284c7; /* sky-600 */
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="bg-neutral-text-neutra100 l-800">
+
+    <nav class="bg-white shadow-md sticky top-0 z-50">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <span class="font-bold text-xl text-sky-600">💰 Controle Financeiro</span>
+                </div>
+                <div class="hidden md:block">
+                    <div class="ml-10 flex items-baseline space-x-4">
+                        <button data-target="dashboard" class="tab-button text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent transition-colors duration-150 active">Dashboard</button>
+                        <button data-target="contas" class="tab-button text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent transition-colors duration-150">Contas Planejadas</button>
+                        <button data-target="transacoes" class="tab-button text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent transition-colors duration-150">Transações</button>
+                        <button data-target="analise" class="tab-button text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent transition-colors duration-150">Análise de Gastos</button>
+                        <button data-target="justificativas" class="tab-button text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 px-3 py-2 rounded-md text-sm font-medium border-b-2 border-transparent transition-colors duration-150">Justificativas</button>
+                    </div>
+                </div>
+                <div class="md:hidden">
+                    <button id="mobile-menu-button" class="inline-flex items-center justify-center p-2 rounded-md text-neutral-500 hover:text-neutral-900 hover:bg-neutral-200 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-sky-500">
+                        <span class="sr-only">Abrir menu principal</span>
+                        <svg id="menu-icon-open" class="block h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                        </svg>
+                        <svg id="menu-icon-close" class="hidden h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <div id="mobile-menu" class="md:hidden hidden">
+            <div class="px-2 pt-2 pb-3 space-y-1 sm:px-3">
+                <button data-target="dashboard" class="tab-button text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 block px-3 py-2 rounded-md text-base font-medium w-full text-left border-b-2 border-transparent transition-colors duration-150 active">Dashboard</button>
+                <button data-target="contas" class="tab-button text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 block px-3 py-2 rounded-md text-base font-medium w-full text-left border-b-2 border-transparent transition-colors duration-150">Contas Planejadas</button>
+                <button data-target="transacoes" class="tab-button text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 block px-3 py-2 rounded-md text-base font-medium w-full text-left border-b-2 border-transparent transition-colors duration-150">Transações</button>
+                <button data-target="analise" class="tab-button text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 block px-3 py-2 rounded-md text-base font-medium w-full text-left border-b-2 border-transparent transition-colors duration-150">Análise de Gastos</button>
+                <button data-target="justificativas" class="tab-button text-neutral-600 hover:bg-neutral-200 hover:text-neutral-900 block px-3 py-2 rounded-md text-base font-medium w-full text-left border-b-2 border-transparent transition-colors duration-150">Justificativas</button>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mx-auto p-4 sm:p-6 lg:p-8">
+        <section id="dashboard" class="content-section">
+            <header class="mb-6">
+                <h1 class="text-3xl font-bold text-neutral-900">Dashboard Financeiro</h1>
+                <p class="text-neutral-600 mt-1">Visão geral e imediata da sua saúde financeira no mês de Maio de 2025. Acompanhe seu orçamento, gastos e as últimas movimentações.</p>
+            </header>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h2 class="text-xl font-semibold text-neutral-700">Saldo Atual <span class="text-sm">(Exemplo)</span></h2>
+                    <p class="text-3xl font-bold text-sky-600 mt-2">R$ 1.280,00</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h2 class="text-xl font-semibold text-neutral-700">Orçamento Planejado</h2>
+                    <p class="text-3xl font-bold text-neutral-800 mt-2">R$ 2.000,00</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h2 class="text-xl font-semibold text-neutral-700">Gasto Real</h2>
+                    <p class="text-3xl font-bold text-neutral-800 mt-2">R$ 2.460,00</p>
+                </div>
+                 <div id="diferencaCard" class="bg-red-500 text-white p-6 rounded-lg shadow-lg md:col-span-1 lg:col-span-3">
+                    <h2 class="text-xl font-semibold">Diferença no Mês</h2>
+                    <p id="diferencaValor" class="text-3xl font-bold mt-2">- R$ 460,00 📉</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h2 class="text-2xl font-semibold text-neutral-800 mb-4">Orçamento vs. Real (Maio 2025)</h2>
+                    <div class="chart-container h-64 sm:h-80 md:h-96">
+                        <canvas id="orcamentoChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-lg">
+                    <h2 class="text-2xl font-semibold text-neutral-800 mb-4">Últimas Transações</h2>
+                    <ul id="listaUltimasTransacoes" class="space-y-3 max-h-96 overflow-y-auto">
+                        </ul>
+                </div>
+            </div>
+        </section>
+
+        <section id="contas" class="content-section hidden">
+            <header class="mb-6">
+                <h1 class="text-3xl font-bold text-neutral-900">✅ Contas Planejadas</h1>
+                <p class="text-neutral-600 mt-1">Gerencie suas despesas recorrentes e esperadas para o mês. Marque-as como pagas e adicione novas previsões.</p>
+            </header>
+            <div class="bg-white p-6 rounded-lg shadow-lg">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-semibold text-neutral-800">Suas Contas de Maio 2025</h2>
+                    <button id="addContaPlanejadaBtn" class="bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-150">
+                        ＋ Nova Conta
+                    </button>
+                </div>
+                <ul id="listaContasPlanejadas" class="space-y-3">
+                    </ul>
+            </div>
+        </section>
+
+        <section id="transacoes" class="content-section hidden">
+            <header class="mb-6">
+                <h1 class="text-3xl font-bold text-neutral-900">💳 Transações Bancárias</h1>
+                <p class="text-neutral-600 mt-1">Visualize as transações importadas das suas contas. O sistema tenta conciliá-las automaticamente com suas contas planejadas.</p>
+            </header>
+             <div class="bg-white p-4 sm:p-6 rounded-lg shadow-lg mb-6">
+                <div class="flex items-center text-sky-700">
+                    <svg class="animate-spin h-5 w-5 mr-3 text-sky-600" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 9.27356 20.943 6.80383 19.2002 4.99979" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+                    <span>Sincronizando com Pluggy... Última sincronização: 30/05/2025 14:00</span>
+                </div>
+            </div>
+            <div class="bg-white p-4 sm:p-6 rounded-lg shadow-lg">
+                <h2 class="text-2xl font-semibold text-neutral-800 mb-4">Histórico de Transações</h2>
+                <ul id="listaTransacoesBancarias" class="space-y-3">
+                    </ul>
+            </div>
+        </section>
+
+        <section id="analise" class="content-section hidden">
+            <header class="mb-6">
+                <h1 class="text-3xl font-bold text-neutral-900">📊 Análise de Gastos</h1>
+                <p class="text-neutral-600 mt-1">Compare seu orçamento planejado com os gastos reais por categoria e entenda onde seu dinheiro foi investido.</p>
+            </header>
+            <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                <div class="lg:col-span-3 bg-white p-6 rounded-lg shadow-lg">
+                    <h2 class="text-2xl font-semibold text-neutral-800 mb-4">Comparativo por Categoria (Maio 2025)</h2>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-neutral-200">
+                            <thead class="bg-neutral-50">
+                                <tr>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">Categoria</th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider">Planejado</th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider">Real</th>
+                                    <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider">Diferença</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabelaAnaliseCategorias" class="bg-white divide-y divide-neutral-200">
+                                </tbody>
+                        </table>
+                    </div>
+                     <div class="mt-4 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
+                        <p class="font-bold">🧠 Total gasto a mais: <span id="totalGastoAMaisAnalise">R$ 310,00</span></p>
+                    </div>
+                </div>
+                <div class="lg:col-span-2 bg-white p-6 rounded-lg shadow-lg">
+                    <h2 class="text-2xl font-semibold text-neutral-800 mb-4">Planejado vs. Real por Categoria</h2>
+                     <div class="chart-container h-96 sm:h-[450px] md:h-[500px]">
+                        <canvas id="analiseCategoriaChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="justificativas" class="content-section hidden">
+            <header class="mb-6">
+                <h1 class="text-3xl font-bold text-neutral-900">✍️ Justificativa de Gastos</h1>
+                <p class="text-neutral-600 mt-1">Explique os gastos que não estavam no seu planejamento inicial ou que desviaram do orçamento.</p>
+            </header>
+            <div class="bg-white p-6 rounded-lg shadow-lg max-w-2xl mx-auto">
+                <h2 class="text-2xl font-semibold text-neutral-800 mb-4">Explicar Gasto Não Planejado</h2>
+                <form id="formJustificativa">
+                    <div class="mb-4">
+                        <label for="justTransacao" class="block text-sm font-medium text-neutral-700 mb-1">Transação (Exemplo)</label>
+                        <input type="text" id="justTransacao" value="Amazon - R$ 180,00 (Eletrônicos)" readonly class="bg-neutral-100 mt-1 block w-full px-3 py-2 border border-neutral-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm">
+                    </div>
+                    <div class="mb-4">
+                        <label for="justMotivo" class="block text-sm font-medium text-neutral-700 mb-1">Motivo</label>
+                        <textarea id="justMotivo" rows="3" class="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" placeholder="Ex: Comprei um fone de ouvido novo pois o antigo quebrou."></textarea>
+                    </div>
+                    <div class="mb-4">
+                        <label for="justCategoria" class="block text-sm font-medium text-neutral-700 mb-1">Categoria</label>
+                        <select id="justCategoria" class="mt-1 block w-full px-3 py-2 border border-neutral-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm">
+                            <option>Compras Online</option>
+                            <option>Alimentação</option>
+                            <option>Lazer</option>
+                            <option>Transporte</option>
+                            <option>Outros</option>
+                        </select>
+                    </div>
+                    <div class="mb-6">
+                        <span class="block text-sm font-medium text-neutral-700 mb-1">Foi necessário?</span>
+                        <div class="mt-2 space-x-4">
+                            <label class="inline-flex items-center">
+                                <input type="radio" name="foiNecessario" value="sim" class="focus:ring-sky-500 h-4 w-4 text-sky-600 border-neutral-300">
+                                <span class="ml-2 text-sm text-neutral-700">Sim</span>
+                            </label>
+                            <label class="inline-flex items-center">
+                                <input type="radio" name="foiNecessario" value="nao" class="focus:ring-sky-500 h-4 w-4 text-sky-600 border-neutral-300">
+                                <span class="ml-2 text-sm text-neutral-700">Não</span>
+                            </label>
+                        </div>
+                    </div>
+                    <button type="submit" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-150">
+                        Salvar Justificativa
+                    </button>
+                </form>
+            </div>
+        </section>
+    </main>
+
+    <div id="modalAddConta" class="modal fixed inset-0 bg-neutral-800 bg-opacity-75 items-center justify-center p-4 z-[100]">
+        <div class="bg-white p-6 sm:p-8 rounded-lg shadow-xl w-full max-w-md transform transition-all">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-semibold text-neutral-800">Adicionar Nova Conta Planejada</h2>
+                <button id="closeModalBtn" class="text-neutral-500 hover:text-neutral-700 text-2xl">&times;</button>
+            </div>
+            <form id="formAddConta">
+                <div class="mb-4">
+                    <label for="contaNome" class="block text-sm font-medium text-neutral-700 mb-1">Nome da Despesa</label>
+                    <input type="text" id="contaNome" required class="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" placeholder="Ex: Aluguel">
+                </div>
+                <div class="mb-4">
+                    <label for="contaValor" class="block text-sm font-medium text-neutral-700 mb-1">Valor Estimado (R$)</label>
+                    <input type="number" id="contaValor" step="0.01" required class="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm" placeholder="Ex: 700.00">
+                </div>
+                <div class="mb-4">
+                    <label for="contaVencimento" class="block text-sm font-medium text-neutral-700 mb-1">Data de Vencimento</label>
+                    <input type="date" id="contaVencimento" required class="mt-1 block w-full px-3 py-2 border border-neutral-300 rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm">
+                </div>
+                <div class="mb-6">
+                    <label for="contaCategoriaAdd" class="block text-sm font-medium text-neutral-700 mb-1">Categoria</label>
+                    <select id="contaCategoriaAdd" class="mt-1 block w-full px-3 py-2 border border-neutral-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-sky-500 focus:border-sky-500 sm:text-sm">
+                        <option>Moradia</option>
+                        <option>Assinaturas</option>
+                        <option>Cartão de Crédito</option>
+                        <option>Alimentação</option>
+                        <option>Transporte</option>
+                        <option>Lazer</option>
+                        <option>Saúde</option>
+                        <option>Educação</option>
+                        <option>Outras</option>
+                    </select>
+                </div>
+                <button type="submit" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded-lg transition-colors duration-150">
+                    Adicionar Conta
+                </button>
+            </form>
+        </div>
+    </div>
+
+
+    <footer class="text-center py-8 mt-12 border-t border-neutral-300">
+        <p class="text-sm text-neutral-600">&copy; 2025 Controle Financeiro Automatizado. Todos os direitos reservados (Exemplo).</p>
+    </footer>
+
+<script>
+    // Mock Data based on the report
+    const orcamentoData = {
+        planejado: 2000.00,
+        real: 2460.00,
+    };
+
+    const ultimasTransacoesData = [
+        { id: 't1', descricao: "Shopee - Compra Online", valor: -300.00, status: "Pagamento detectado e conciliado", data: "30/05/2025", conciliada: true },
+        { id: 't2', descricao: "Restaurante Bom Sabor", valor: -85.50, status: "Gasto não planejado", data: "29/05/2025", conciliada: false },
+        { id: 't3', descricao: "Salário Empresa XYZ", valor: 5000.00, status: "Entrada", data: "28/05/2025", conciliada: true, entrada: true },
+        { id: 't4', descricao: "Supermercado Preço Justo", valor: -275.30, status: "Gasto não planejado", data: "28/05/2025", conciliada: false},
+        { id: 't5', descricao: "Netflix", valor: -39.90, status: "Pagamento detectado e conciliado", data: "27/05/2025", conciliada: true },
+    ];
+    
+    let contasPlanejadasData = [
+        { id: 'cp1', nome: 'Aluguel', valor: 1200.00, vencimento: '2025-05-05', categoria: 'Moradia', paga: true },
+        { id: 'cp2', nome: 'Cartão Nubank', valor: 700.00, vencimento: '2025-06-02', categoria: 'Cartão de Crédito', paga: false },
+        { id: 'cp3', nome: 'Shopee', valor: 300.00, vencimento: '2025-05-30', categoria: 'Compras Online', paga: true },
+        { id: 'cp4', nome: 'Spotify', valor: 20.00, vencimento: 'Recorrente', categoria: 'Assinaturas', paga: false },
+        { id: 'cp5', nome: 'Curso Inglês', valor: 250.00, vencimento: '2025-05-10', categoria: 'Educação', paga: true },
+    ];
+
+    const transacoesBancariasData = [
+        { id: 'tb1', nome: 'Shopee', valor: -300.00, data: '30/05/2025', status: 'correspondente', planejada: true, categoria: 'Compras Online' },
+        { id: 'tb2', nome: 'Amazon - Eletrônicos', valor: -180.00, data: '29/05/2025', status: 'nao_planejado', planejada: false, categoria: 'Compras Online' },
+        { id: 'tb3', nome: 'Restaurante XYZ', valor: -120.00, data: '29/05/2025', status: 'nao_planejado', planejada: false, categoria: 'Alimentação' },
+        { id: 'tb4', nome: 'Cinema Pipoca', valor: -70.00, data: '27/05/2025', status: 'nao_planejado', planejada: false, categoria: 'Lazer' },
+        { id: 'tb5', nome: 'Pagamento Aluguel', valor: -1200.00, data: '05/05/2025', status: 'correspondente', planejada: true, categoria: 'Moradia' },
+    ];
+
+    const analiseCategoriasData = [
+        { categoria: 'Alimentação', planejado: 500.00, real: 580.00 },
+        { categoria: 'Compras Online', planejado: 400.00, real: 480.00 }, // Shopee 300 + Amazon 180
+        { categoria: 'Lazer', planejado: 200.00, real: 350.00 }, // Restaurante 120 + Cinema 70 + Outros Lazer (suposição)
+        { categoria: 'Moradia', planejado: 1200.00, real: 1200.00 },
+        { categoria: 'Assinaturas', planejado: 20.00, real: 39.90 }, // Spotify 20 (planejado, não pago) vs Netflix 39.90 (real)
+        { categoria: 'Transporte', planejado: 150.00, real: 100.00 },
+        { categoria: 'Educação', planejado: 250.00, real: 250.00 },
+    ];
+    
+    // Helper to format currency
+    function formatCurrency(value) {
+        return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    // DOM Elements
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const contentSections = document.querySelectorAll('.content-section');
+    const mobileMenuButton = document.getElementById('mobile-menu-button');
+    const mobileMenu = document.getElementById('mobile-menu');
+    const menuIconOpen = document.getElementById('menu-icon-open');
+    const menuIconClose = document.getElementById('menu-icon-close');
+
+    // Navigation Logic
+    function setActiveTab(targetId) {
+        contentSections.forEach(section => {
+            section.classList.add('hidden');
+            if (section.id === targetId) {
+                section.classList.remove('hidden');
+            }
+        });
+        tabButtons.forEach(button => {
+            button.classList.remove('active');
+            if (button.dataset.target === targetId) {
+                button.classList.add('active');
+            }
+        });
+        // Close mobile menu after navigation
+        if (!mobileMenu.classList.contains('hidden')) {
+            mobileMenu.classList.add('hidden');
+            menuIconOpen.classList.remove('hidden');
+            menuIconClose.classList.add('hidden');
+        }
+    }
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            setActiveTab(button.dataset.target);
+        });
+    });
+
+    mobileMenuButton.addEventListener('click', () => {
+        mobileMenu.classList.toggle('hidden');
+        menuIconOpen.classList.toggle('hidden');
+        menuIconClose.classList.toggle('hidden');
+    });
+    
+    // Initial active tab
+    setActiveTab('dashboard');
+
+    // Dashboard Logic
+    function renderDashboard() {
+        const diferenca = orcamentoData.real - orcamentoData.planejado;
+        const diferencaCard = document.getElementById('diferencaCard');
+        const diferencaValor = document.getElementById('diferencaValor');
+
+        diferencaValor.textContent = `${diferenca > 0 ? '-' : '+'} ${formatCurrency(Math.abs(diferenca))} ${diferenca > 0 ? '📉' : '📈'}`;
+        diferencaCard.classList.remove('bg-red-500', 'bg-emerald-500');
+        diferencaCard.classList.add(diferenca > 0 ? 'bg-red-500' : 'bg-emerald-500');
+        
+        // Render Últimas Transações
+        const listaUltimasTransacoes = document.getElementById('listaUltimasTransacoes');
+        listaUltimasTransacoes.innerHTML = ''; // Clear list
+        ultimasTransacoesData.slice(0, 5).forEach(transacao => { // Show max 5
+            const itemClasses = "flex justify-between items-center p-3 rounded-md hover:bg-neutral-50 transition-colors duration-150";
+            const statusColor = transacao.conciliada && !transacao.entrada ? 'text-emerald-600' : transacao.entrada ? 'text-sky-600' : 'text-red-600';
+            const valorColor = transacao.valor > 0 ? 'text-emerald-600' : 'text-red-600';
+            const icon = transacao.conciliada && !transacao.entrada ? '✅' : transacao.entrada ? '⬆️' : '⚠️';
+
+            const li = document.createElement('li');
+            li.className = itemClasses + (transacao.entrada ? ' border-l-4 border-sky-500' : transacao.conciliada ? ' border-l-4 border-emerald-500' : ' border-l-4 border-red-500');
+            li.innerHTML = `
+                <div>
+                    <p class="font-semibold text-neutral-700">${transacao.descricao}</p>
+                    <p class="text-xs ${statusColor}">${icon} ${transacao.status} - ${transacao.data}</p>
+                </div>
+                <span class="font-semibold ${valorColor}">${formatCurrency(transacao.valor)}</span>
+            `;
+            listaUltimasTransacoes.appendChild(li);
+        });
+
+
+        // Render Orçamento Chart
+        const ctxOrcamento = document.getElementById('orcamentoChart').getContext('2d');
+        if (window.orcamentoChartInstance) {
+            window.orcamentoChartInstance.destroy();
+        }
+        window.orcamentoChartInstance = new Chart(ctxOrcamento, {
+            type: 'bar',
+            data: {
+                labels: ['Planejado', 'Real'],
+                datasets: [{
+                    label: 'Valor (R$)',
+                    data: [orcamentoData.planejado, orcamentoData.real],
+                    backgroundColor: [
+                        'rgba(54, 162, 235, 0.6)', // Blue for Planejado
+                        'rgba(255, 99, 132, 0.6)'  // Red for Real (if overspent)
+                    ],
+                    borderColor: [
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) { return formatCurrency(value); }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return formatCurrency(context.raw);
+                            }
+                        }
+                    }
+                }
+            }
+        });
+         // Adjust chart background if 'real' exceeds 'planejado'
+        if (orcamentoData.real > orcamentoData.planejado) {
+            window.orcamentoChartInstance.data.datasets[0].backgroundColor[1] = 'rgba(255, 99, 132, 0.6)'; // Red
+            window.orcamentoChartInstance.data.datasets[0].borderColor[1] = 'rgba(255, 99, 132, 1)';
+        } else {
+            window.orcamentoChartInstance.data.datasets[0].backgroundColor[1] = 'rgba(75, 192, 192, 0.6)'; // Green
+            window.orcamentoChartInstance.data.datasets[0].borderColor[1] = 'rgba(75, 192, 192, 1)';
+        }
+        window.orcamentoChartInstance.update();
+    }
+
+    // Contas Planejadas Logic
+    const listaContasPlanejadasEl = document.getElementById('listaContasPlanejadas');
+    const modalAddConta = document.getElementById('modalAddConta');
+    const addContaPlanejadaBtn = document.getElementById('addContaPlanejadaBtn');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const formAddConta = document.getElementById('formAddConta');
+
+    function renderContasPlanejadas() {
+        listaContasPlanejadasEl.innerHTML = '';
+        contasPlanejadasData.sort((a,b) => new Date(a.vencimento) - new Date(b.vencimento)).sort((a, b) => a.paga - b.paga).forEach(conta => {
+            const li = document.createElement('li');
+            li.className = `p-4 rounded-lg border flex items-center justify-between transition-all duration-200 ${conta.paga ? 'bg-emerald-50 border-emerald-200 opacity-70' : 'bg-white border-neutral-200 hover:shadow-md'}`;
+            
+            const checkboxId = `conta-${conta.id}`;
+            li.innerHTML = `
+                <div class="flex items-center">
+                    <input type="checkbox" id="${checkboxId}" data-id="${conta.id}" class="h-5 w-5 text-sky-600 border-neutral-300 rounded focus:ring-sky-500 mr-3" ${conta.paga ? 'checked' : ''}>
+                    <div>
+                        <label for="${checkboxId}" class="font-semibold ${conta.paga ? 'line-through text-neutral-500' : 'text-neutral-700'} cursor-pointer">${conta.nome}</label>
+                        <p class="text-sm ${conta.paga ? 'text-neutral-400' : 'text-neutral-500'}">${formatCurrency(conta.valor)} - Venc: ${conta.vencimento === 'Recorrente' ? 'Recorrente' : new Date(conta.vencimento  + 'T00:00:00').toLocaleDateString('pt-BR')} (${conta.categoria})</p>
+                    </div>
+                </div>
+                <button data-id="${conta.id}" class="delete-conta-btn text-red-500 hover:text-red-700 text-xs font-semibold">Excluir</button>
+            `;
+            listaContasPlanejadasEl.appendChild(li);
+        });
+
+        // Add event listeners for checkboxes
+        document.querySelectorAll('#listaContasPlanejadas input[type="checkbox"]').forEach(checkbox => {
+            checkbox.addEventListener('change', (e) => {
+                const contaId = e.target.dataset.id;
+                const conta = contasPlanejadasData.find(c => c.id === contaId);
+                if (conta) {
+                    conta.paga = e.target.checked;
+                    renderContasPlanejadas(); // Re-render to update styles
+                }
+            });
+        });
+        // Add event listeners for delete buttons
+        document.querySelectorAll('.delete-conta-btn').forEach(button => {
+            button.addEventListener('click', (e) => {
+                const contaId = e.target.dataset.id;
+                contasPlanejadasData = contasPlanejadasData.filter(c => c.id !== contaId);
+                renderContasPlanejadas(); // Re-render list
+            });
+        });
+    }
+
+    addContaPlanejadaBtn.addEventListener('click', () => modalAddConta.classList.add('active'));
+    closeModalBtn.addEventListener('click', () => modalAddConta.classList.remove('active'));
+    modalAddConta.addEventListener('click', (e) => {
+        if (e.target === modalAddConta) { // Click outside modal content
+            modalAddConta.classList.remove('active');
+        }
+    });
+
+    formAddConta.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const nome = document.getElementById('contaNome').value;
+        const valor = parseFloat(document.getElementById('contaValor').value);
+        const vencimento = document.getElementById('contaVencimento').value;
+        const categoria = document.getElementById('contaCategoriaAdd').value;
+
+        if (nome && !isNaN(valor) && vencimento && categoria) {
+            contasPlanejadasData.push({
+                id: 'cp' + (contasPlanejadasData.length + 1) + Date.now(),
+                nome,
+                valor,
+                vencimento,
+                categoria,
+                paga: false
+            });
+            renderContasPlanejadas();
+            modalAddConta.classList.remove('active');
+            formAddConta.reset();
+        } else {
+            alert("Por favor, preencha todos os campos corretamente.");
+        }
+    });
+
+    // Transações Bancárias Logic
+    function renderTransacoesBancarias() {
+        const listaTransacoesBancariasEl = document.getElementById('listaTransacoesBancarias');
+        listaTransacoesBancariasEl.innerHTML = '';
+        transacoesBancariasData.forEach(transacao => {
+            const li = document.createElement('li');
+            const statusClass = transacao.status === 'correspondente' ? 'border-emerald-500 bg-emerald-50' : 'border-amber-500 bg-amber-50';
+            const icon = transacao.status === 'correspondente' ? '✅' : '⚠️';
+            const statusText = transacao.status === 'correspondente' ? 'Conciliado com conta planejada' : 'Não planejado';
+
+            li.className = `p-4 rounded-lg border-l-4 ${statusClass} flex flex-col sm:flex-row sm:items-center sm:justify-between mb-3 shadow-sm`;
+            li.innerHTML = `
+                <div>
+                    <p class="font-semibold text-neutral-800">${transacao.nome} - ${formatCurrency(transacao.valor)}</p>
+                    <p class="text-sm text-neutral-600">${transacao.data} - Cat: ${transacao.categoria}</p>
+                    <p class="text-xs font-medium ${transacao.status === 'correspondente' ? 'text-emerald-700' : 'text-amber-700'}">${icon} ${statusText}</p>
+                </div>
+                <div class="mt-3 sm:mt-0 sm:ml-4 flex space-x-2">
+                    ${transacao.status !== 'correspondente' ? `
+                        <button class="text-xs bg-sky-100 text-sky-700 hover:bg-sky-200 px-3 py-1 rounded-md font-medium transition-colors duration-150">Associar</button>
+                        <button class="text-xs bg-neutral-100 text-neutral-700 hover:bg-neutral-200 px-3 py-1 rounded-md font-medium transition-colors duration-150" onclick="navigateToJustificativa('${transacao.id}')">Explicar</button>
+                    ` : '<span class="text-xs text-emerald-600 font-medium p-1">Conciliado</span>'}
+                </div>
+            `;
+            listaTransacoesBancariasEl.appendChild(li);
+        });
+    }
+    
+    window.navigateToJustificativa = function(transacaoId) {
+        const transacao = transacoesBancariasData.find(t => t.id === transacaoId);
+        if (transacao) {
+            document.getElementById('justTransacao').value = `${transacao.nome} - ${formatCurrency(transacao.valor)}`;
+            // Potentially pre-fill other fields for justificativa based on transacao
+        }
+        setActiveTab('justificativas');
+    }
+
+
+    // Análise de Gastos Logic
+    function renderAnaliseGastos() {
+        const tabelaAnaliseCategoriasEl = document.getElementById('tabelaAnaliseCategorias');
+        tabelaAnaliseCategoriasEl.innerHTML = '';
+        let totalGastoAMais = 0;
+
+        analiseCategoriasData.forEach(item => {
+            const diferenca = item.real - item.planejado;
+            totalGastoAMais += (diferenca > 0 ? diferenca : 0);
+            const diferencaColor = diferenca > 0 ? 'text-red-600' : 'text-emerald-600';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">${item.categoria}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 text-right">${formatCurrency(item.planejado)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-neutral-500 text-right">${formatCurrency(item.real)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-semibold ${diferencaColor} text-right">${diferenca !== 0 ? (diferenca > 0 ? '-' : '+') : ''}${formatCurrency(Math.abs(diferenca))}</td>
+            `;
+            tabelaAnaliseCategoriasEl.appendChild(tr);
+        });
+        document.getElementById('totalGastoAMaisAnalise').textContent = formatCurrency(totalGastoAMais);
+
+        // Render Análise Categoria Chart
+        const ctxAnaliseCategoria = document.getElementById('analiseCategoriaChart').getContext('2d');
+        if (window.analiseCategoriaChartInstance) {
+            window.analiseCategoriaChartInstance.destroy();
+        }
+        window.analiseCategoriaChartInstance = new Chart(ctxAnaliseCategoria, {
+            type: 'bar',
+            data: {
+                labels: analiseCategoriasData.map(item => item.categoria),
+                datasets: [
+                    {
+                        label: 'Planejado (R$)',
+                        data: analiseCategoriasData.map(item => item.planejado),
+                        backgroundColor: 'rgba(54, 162, 235, 0.6)', // Blue
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Real (R$)',
+                        data: analiseCategoriasData.map(item => item.real),
+                        backgroundColor: 'rgba(255, 99, 132, 0.6)', // Red
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y', // Horizontal bars for better readability of categories
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) { return formatCurrency(value); }
+                        }
+                    },
+                    y: {
+                        ticks: {
+                             autoSkip: false, // Ensure all labels are shown
+                             maxRotation: 0, // Prevent rotation
+                             minRotation: 0
+                        }
+                    }
+                },
+                 plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.parsed.x !== null) {
+                                    label += formatCurrency(context.parsed.x);
+                                }
+                                return label;
+                            }
+                        }
+                    },
+                    legend: {
+                        position: 'top',
+                    }
+                }
+            }
+        });
+    }
+
+    // Justificativa de Gastos Logic
+    const formJustificativa = document.getElementById('formJustificativa');
+    formJustificativa.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const motivo = document.getElementById('justMotivo').value;
+        const categoria = document.getElementById('justCategoria').value;
+        const foiNecessario = document.querySelector('input[name="foiNecessario"]:checked');
+        
+        if (motivo && categoria && foiNecessario) {
+            alert(`Justificativa salva!\nMotivo: ${motivo}\nCategoria: ${categoria}\nNecessário: ${foiNecessario.value}`);
+            formJustificativa.reset();
+            document.getElementById('justTransacao').value = "Transação Exemplo"; // Reset example
+            setActiveTab('transacoes'); // Or wherever is appropriate
+        } else {
+            alert("Por favor, preencha todos os campos obrigatórios.");
+        }
+    });
+
+
+    // Initial Renders
+    document.addEventListener('DOMContentLoaded', () => {
+        renderDashboard();
+        renderContasPlanejadas();
+        renderTransacoesBancarias();
+        renderAnaliseGastos();
+        // No initial render for Justificativas as it's context-driven
+    });
+
+
+
+</script>
+</body>
+</html>
